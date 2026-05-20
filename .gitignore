@@ -1,0 +1,9 @@
+# Lokální konfigurace s tajnými klíči — NECOMMITOVAT
+config.local.php
+
+# SQLite databáze (obsahuje data studentů, generuje se automaticky)
+data/merits.db
+
+# Systémové soubory
+.DS_Store
+Thumbs.db

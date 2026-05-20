@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="cs">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Silicon Ribbons — Přehled Ocenění</title>
+    <meta name="description"
+        content="Přehled všech možných ocenění (ribbons) a podmínek pro jejich získání v rámci IT Merit System.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Raleway:ital,wght@0,200;0,400;0,600;1,400&display=swap"
+        rel="stylesheet">
+
+    <style>
+        /* ═══════════════════════════════
+           DESIGN TOKENY
+        ═══════════════════════════════ */
+        :root {
+            --bg-color-top: #003b4b;
+            --bg-color-bottom: #006783;
+            --text-color: #ffffff;
+            --font-family: "Raleway", sans-serif;
+
+            --logo-left-top: #ffd400;
+            --logo-left-bottom: #ffea80;
+            --logo-right-top: #41d7ff;
+            --logo-right-bottom: #00c0f3;
+            --logo-bottom-left: #c2dd78;
+            --logo-bottom-right: #a6ce39;
+
+            --panel-bg: rgba(0, 27, 34, 0.45);
+            --border-color: rgba(255, 255, 255, 0.12);
+            --border-h: rgba(255, 255, 255, 0.25);
+            --muted: rgba(255, 255, 255, 0.5);
+            --accent: var(--logo-right-top);
+        }
+
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: var(--font-family);
+            font-weight: 400;
+            font-size: 16px;
+            line-height: 1.5;
+            color: var(--text-color);
+            background: linear-gradient(0deg, var(--bg-color-bottom), var(--bg-color-top)) fixed;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ═══════════════════════════════
+           RYCHLÁ NAVIGACE
+        ═══════════════════════════════ */
+        .quick-nav {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-bottom: 3rem;
+            justify-content: center;
+        }
+
+        .quick-nav a {
+            text-decoration: none;
+            display: block;
+            width: 140px;
+            height: 48px;
+            transition: transform 0.2s cubic-bezier(.34, 1.56, .64, 1), filter 0.2s ease;
+            border-radius: 3px;
+        }
+
+        .quick-nav a:hover {
+            transform: translateY(-5px) scale(1.05);
+            filter: brightness(1.2);
+        }
+
+        .frame {
+            width: min(100%, 1000px);
+            margin: 0 auto;
+            padding: 1.5rem 2rem;
+        }
+
+        /* ═══════════════════════════════
+           HEADER
+        ═══════════════════════════════ */
+        header {
+            background: rgba(0, 27, 34, 0.5);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        header .frame {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            font-weight: 600;
+        }
+
+        .logo .img {
+            width: 3.5rem;
+            height: 3rem;
+            flex-shrink: 0;
+        }
+
+        .logo .img svg {
+            height: 100%;
+            width: 100%;
+        }
+
+        .logo .img svg .left-top { fill: var(--logo-left-top); }
+        .logo .img svg .left-bottom { fill: var(--logo-left-bottom); }
+        .logo .img svg .right-top { fill: var(--logo-right-top); }
+        .logo .img svg .right-bottom { fill: var(--logo-right-bottom); }
+        .logo .img svg .bottom-left { fill: var(--logo-bottom-left); }
+        .logo .img svg .bottom-right { fill: var(--logo-bottom-right); }
+
+        .logo .txt {
+            font-size: 1rem;
+            line-height: 1.25;
+            letter-spacing: 0.02em;
+            color: var(--text-color);
+        }
+
+        .site-title {
+            text-align: right;
+        }
+
+        .site-title h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--text-color);
+            line-height: 1.1;
+        }
+
+        .site-title .subtitle {
+            font-size: 0.75rem;
+            font-weight: 400;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-top: 2px;
+        }
+
+        /* ═══════════════════════════════
+           MAIN OBSAH
+        ═══════════════════════════════ */
+        main {
+            flex-grow: 1;
+        }
+
+        main > .frame {
+            padding-top: 2.5rem;
+            padding-bottom: 3rem;
+        }
+
+        .intro-text {
+            font-size: 1.05rem;
+            color: var(--text-color);
+            margin-bottom: 2.5rem;
+            line-height: 1.6;
+            background: var(--panel-bg);
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            border: 1px solid var(--border-color);
+        }
+
+        .intro-text p {
+            margin-bottom: 1rem;
+        }
+        .intro-text p:last-child {
+            margin-bottom: 0;
+        }
+        .intro-text strong {
+            color: var(--logo-left-top);
+        }
+
+        .section-label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: var(--logo-right-top);
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .section-label::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--border-color);
+        }
+
+        /* ═══════════════════════════════
+           KATEGORIE KARTY
+        ═══════════════════════════════ */
+        .category-card {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            margin-bottom: 2rem;
+            overflow: hidden;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            scroll-margin-top: 2rem;
+        }
+
+        .category-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            position: relative;
+        }
+
+        .category-header::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; bottom: 0; width: 6px;
+            background: var(--cat-color, var(--accent));
+        }
+
+        .category-title {
+            font-size: 1.4rem;
+            font-weight: 600;
+            color: var(--text-color);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .category-abbr {
+            background: var(--cat-color);
+            padding: 0.2rem 0.6rem;
+            border-radius: 0.25rem;
+            font-size: 0.9rem;
+            letter-spacing: 0.1em;
+            color: white;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+        }
+
+        .category-desc {
+            font-size: 0.9rem;
+            color: var(--muted);
+            margin-top: 0.5rem;
+            margin-left: 4.5rem;
+        }
+
+        .level-list {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .level-item {
+            display: flex;
+            gap: 1.5rem;
+            align-items: center;
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            transition: background 0.2s;
+        }
+
+        .level-item:last-child {
+            border-bottom: none;
+        }
+
+        .level-item:hover {
+            background: rgba(255,255,255,0.03);
+        }
+
+        .level-ribbon {
+            flex-shrink: 0;
+            width: 140px;
+            height: 48px;
+            border-radius: 3px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+        }
+
+        .level-ribbon svg {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .level-content {
+            flex-grow: 1;
+        }
+
+        .level-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--logo-left-top);
+            margin-bottom: 0.25rem;
+            display: flex;
+            align-items: baseline;
+            gap: 0.5rem;
+        }
+
+        .level-lvl {
+            font-size: 0.8rem;
+            color: var(--muted);
+            font-weight: 400;
+        }
+
+        .level-req {
+            font-size: 0.9rem;
+            color: rgba(255,255,255,0.9);
+            line-height: 1.5;
+        }
+
+        /* ═══════════════════════════════
+           FOOTER
+        ═══════════════════════════════ */
+        footer {
+            padding: 1.5rem 0;
+            text-align: center;
+            font-size: 0.8rem;
+            font-weight: 400;
+            color: var(--muted);
+            background: rgba(0, 0, 0, 0.25);
+            border-top: 1px solid var(--border-color);
+            margin-top: 2rem;
+        }
+
+        /* ═══════════════════════════════
+           RESPONZIVITA
+        ═══════════════════════════════ */
+        @media (max-width: 768px) {
+            .level-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 1rem;
+            }
+            .category-title {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.5rem;
+            }
+            .category-desc {
+                margin-left: 0;
+            }
+        }
+        @media (max-width: 600px) {
+            .site-title h1 { font-size: 1.1rem; }
+            header .frame { justify-content: center; }
+            .site-title { text-align: center; }
+        }
+    </style>
+</head>
+
+<body>
+
+    <header>
+        <div class="frame">
+            <div class="logo">
+                <div class="img">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 866">
+                        <polygon class="left-top" points="0 0 500 0 500 188 326 188 0 0"></polygon>
+                        <polygon class="left-bottom" points="0 0 326 188 413 339 250 433 0 0"></polygon>
+                        <polygon class="right-top" points="500 0 1000 0 674 188 500 188 500 0"></polygon>
+                        <polygon class="right-bottom" points="674 188 1000 0 750 433 587 339 674 188"></polygon>
+                        <polygon class="bottom-left" points="250 433 413 339 500 490 500 866 250 433"></polygon>
+                        <polygon class="bottom-right" points="500 490 587 339 750 433 500 866 500 490"></polygon>
+                    </svg>
+                </div>
+                <div class="txt">VOŠ | SPŠ | SOŠ<br>Varnsdorf</div>
+            </div>
+            <div class="site-title">
+                <h1>Silicon Ribbons</h1>
+                <p class="subtitle">Katalog Ocenění</p>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <div class="frame">
+            
+            <div class="intro-text">
+                <p><strong>Merit systém</strong> je nástroj gamifikace vzdělávání, který transformuje tradiční hodnocení na cestu osobního rozvoje. Místo trestání za chyby systém oceňuje proaktivitu, inovaci, samostatnost a ochotu pomáhat ostatním.</p>
+                <p>Žáci získávají digitální i fyzické <strong>Ribbons (stužky)</strong>, které reprezentují jejich reálné dovednosti v klíčových IT disciplínách. Systém striktně rozlišuje 5 úrovní růstu (L1 až L5), které se neodvíjí od věku nebo ročníku, ale od prokazatelných kompetencí.</p>
+            </div>
+
+            <p class="section-label">Rychlá navigace</p>
+            <nav id="quick-nav" class="quick-nav">
+                <!-- Generováno přes JS -->
+            </nav>
+
+            <p class="section-label">Katalog kategorií a požadavky</p>
+            <div id="categories-container">
+                <!-- Generováno přes JS -->
+            </div>
+
+        </div>
+    </main>
+
+    <footer>
+        <div class="frame">
+            <p>Vyšší odborná škola, Střední průmyslová škola a Střední odborná škola, Varnsdorf, příspěvková organizace</p>
+        </div>
+    </footer>
+
+    <script>
+        const DEFAULT_LEVEL_NAMES = {
+            1: 'Nováček',
+            2: 'Pokročilý',
+            3: 'Profík',
+            4: 'Mistr',
+            5: 'Mentor'
+        };
+
+        const CATEGORIES_DATA = [
+            {
+                id: 'DEV',
+                title: 'Software & Web Development',
+                base: '#1E3A8A', light: '#3B82F6',
+                desc: 'Algoritmizace, čistý kód, frontend, backend a softwarová architektura.',
+                levels: {
+                    1: { req: 'Napíše funkční skript s podmínkami a cykly / nakóduje statický responzivní web (HTML/CSS).' },
+                    2: { req: 'Používá funkce/objekty, verzuje kód v Gitu, zvládá základy moderního frameworku (React/Vue/Svelte).' },
+                    3: { req: 'Vytvoří plně funkční full-stack aplikaci s databází, ošetřením chyb a nasazením na server.' },
+                    4: { req: 'Navrhne komplexní architekturu projektu, píše unit testy, zvládne nový programovací jazyk nad rámec výuky.' },
+                    5: { req: 'Provádí code-review spolužákům, vede vývojářský tým v ročníkovém projektu, doučuje základy nižší ročníky.' }
+                }
+            },
+            {
+                id: 'SEC',
+                title: 'Cyber Security',
+                base: '#7F1D1D', light: '#EF4444',
+                desc: 'Defenzivní i ofenzivní bezpečnost, kryptografie, etický hacking a bezpečný vývoj.',
+                levels: {
+                    1: { req: 'Správně nastaví silné ověřování (2FA/MFA), prokáže hluboké porozumění phishingu a sociálnímu inženýrství.' },
+                    2: { req: 'Úspěšně vyřeší základní Capture The Flag (CTF) výzvy, dokáže analyzovat síťový provoz na přítomnost hrozeb.' },
+                    3: { req: 'Provede bezpečný audit webu/kódu podle standardu OWASP Top 10, dokáže úspěšně detekovat a popsat malware v sandboxu.' },
+                    4: { req: 'Zodpovědně nahlásí reálnou zranitelnost ve školní či jiné síti (Bug Bounty) / získá průmyslový certifikát (např. CompTIA Security+, CEH).' },
+                    5: { req: 'Spoluorganizuje školní CTF soutěž pro ostatní, spravuje bezpečné laboratorní prostředí pro praktická cvičení třídy.' }
+                }
+            },
+            {
+                id: 'NET',
+                title: 'Networking & Infrastructure',
+                base: '#14532D', light: '#22C55E',
+                desc: 'Síťové protokoly, topologie, aktivní prvky, diagnostika a správa síťového HW.',
+                levels: {
+                    1: { req: 'Rozumí IP adresaci (IPv4/IPv6), správně vyrobí (nakrimpuje) síťový kabel a zapojí domácí router.' },
+                    2: { req: 'Konfiguruje VLANy a základní směrování (routing) na Cisco/MikroTik zařízeních v simulátoru (Packet Tracer).' },
+                    3: { req: 'Navrhne, zdokumentuje a fyzicky zapojí funkční topologii s redundancí a zabezpečením v reálné laboratoři.' },
+                    4: { req: 'Úspěšně diagnostikuje a opraví komplexní výpadek sítě, konfiguruje dynamické směrování (OSPF) / získá certifikaci Cisco CCNA.' },
+                    5: { req: 'Spravuje a dokumentuje školní síťovou laboratoř, pomáhá učiteli s přípravou praktických zadání pro mladší ročníky.' }
+                }
+            },
+            {
+                id: 'HW',
+                title: 'Hardware & IoT',
+                base: '#1C1C24', light: '#94A3B8',
+                desc: 'Stavba PC, diagnostika závad, mikrokoncepty, robotika a vestavěné systémy.',
+                levels: {
+                    1: { req: 'Samostatně sestaví počítač z komponent, nainstaluje operační systém a nakonfiguruje BIOS/UEFI.' },
+                    2: { req: 'Naprogramuje jednoúčelové Arduino/ESP32 (např. čtení z čidel a zápis na displej).' },
+                    3: { req: 'Navrhne jednoduchý plošný spoj (PCB) v CAD programu, bezpečně spájí komponenty a oživí IoT zařízení.' },
+                    4: { req: 'Provede pokročilou opravu na úrovni desky (multimetr, pájení), realizuje komplexní IoT projekt s odesíláním dat do cloudu přes MQTT/HTTP.' },
+                    5: { req: 'Působí jako správce školní dílny/3D tiskáren, pomáhá spolužákům s hardwarovou částí jejich maturitních a ročníkových prací.' }
+                }
+            },
+            {
+                id: 'AID',
+                title: 'Artificial Intelligence & Data',
+                base: '#BE185D', light: '#EC4899',
+                desc: 'Efektivní integrace AI, prompt engineering, analýza dat, databáze a lokální nasazování modelů.',
+                levels: {
+                    1: { req: 'Efektivně využívá LLM jako asistenta pro zrychlení práce a učení (pokročilý prompt engineering), prokáže kritické myšlení vůči halucinacím AI.' },
+                    2: { req: 'Zpracuje a vizualizuje komplexní surový dataset (SQL, Python/Pandas), vytvoří z něj čistý interaktivní dashboard (PowerBI/Streamlit).' },
+                    3: { req: 'Inovativně integruje AI do vlastního projektu (např. přes API OpenAI/Anthropic ve své webové či mobilní aplikaci).' },
+                    4: { req: 'Dokáže lokálně nasadit open-source model (např. přes Ollama), úspěšně provede fine-tuning (dotrénování) nebo RAG (vektorovou databázi) nad specifickými daty.' },
+                    5: { req: 'Pomáhá učitelům nebo spolužákům s efektivním a etickým nasazením AI do výuky, vede datové analýzy pro velké školní projekty.' }
+                }
+            },
+            {
+                id: 'OPS',
+                title: 'DevOps & Cloud',
+                base: '#0F766E', light: '#14B8A6',
+                desc: 'Linux, virtualizace, kontejnerizace, automatizace vývoje (CI/CD) a správa serverů.',
+                levels: {
+                    1: { req: 'Ovládá základní práci v Linux terminálu (CLI), dokáže se bezpečně připojit přes SSH a spravovat soubory.' },
+                    2: { req: 'Spustí a správně zprovozní webovou aplikaci v Docker kontejneru, rozumí principům izolace procesů.' },
+                    3: { req: 'Spravuje vlastní Linux server (webserver, databáze), nastaví automatické šifrované zálohování a bezpečný firewall.' },
+                    4: { req: 'Vytvoří funkční CI/CD pipeline (GitHub Actions/GitLab CI) s automatickým nasazením na cloud/VPS / získá certifikaci (např. AWS SysOps, Azure Administrator).' },
+                    5: { req: 'Spravuje sdílenou serverovou infrastrukturu pro projekty spolužáků, pomáhá s deploymentem ostatním maturitním týmům.' }
+                }
+            },
+            {
+                id: 'DSN',
+                title: 'UI/UX & Design',
+                base: '#581C87', light: '#A855F7',
+                desc: 'Grafický design, wireframy, uživatelské testování, vizuální identita a prezentace.',
+                levels: {
+                    1: { req: 'Vytvoří čistou, typograficky správnou prezentaci projektu podle základních kompozičních pravidel.' },
+                    2: { req: 'Navrhne vektorové logo a základní identitu značky (brand book), bezpečně ovládá nástroje jako Figma nebo Adobe Creative Cloud.' },
+                    3: { req: 'Vytvoří kompletní interaktivní UI/UX prototyp mobilní nebo webové aplikace včetně doloženého uživatelského testování.' },
+                    4: { req: 'Kompletně zastřeší vizuální a frontendovou identitu velkého školního projektu, vytvoří profesionální animace, video nebo promo grafiku.' },
+                    5: { req: 'Garantuje "design code" u týmových projektů, pomáhá ostatním technicky zaměřeným žákům vizuálně a marketingově prodat jejich řešení.' }
+                }
+            },
+            {
+                id: 'AWD',
+                title: 'Special & External Awards',
+                base: '#B45309', light: '#F59E0B',
+                desc: 'Reprezentace školy na externích akcích, úspěchy v odborných soutěžích, účast na hackathonech a mimořádné zásluhy o rozvoj školní komunity.',
+                levels: {
+                    1: { name: 'Regionální reprezentant', req: 'Úspěšná účast (v horní polovině listiny) v okresním kole odborné soutěže (SOČ, KyberSoutěž, programování) / aktivní účast na lokálním hackathonu / pomoc na Dnech otevřených dveří.' },
+                    2: { name: 'Krajský finalista', req: 'Postup a úspěšná účast v krajském kole odborné soutěže / prezentace vlastní práce na regionální přehlídce / odevzdání funkčního prototypu na meziškolním hackathonu v limitu.' },
+                    3: { name: 'Národní úroveň', req: 'Postup do celostátního finále uznávané soutěže / 1.–3. místo v krajském kole SOČ či KyberSoutěže / naprogramování interního systému, který škola reálně nasadí do ostrého provozu.' },
+                    4: { name: 'Národní elita', req: 'Umístění na stupních vítězů (1.–3. místo) v celostátním finále / nominace do mezinárodního kola IT soutěže / absolutní vítězství na prestižním hackathonu v konkurenci dospělých/VŠ týmů.' },
+                    5: { name: 'Školní legenda', req: 'Absolutní vítězství v celostátním finále nebo medaile z mezinárodního kola / dlouhodobý úspěšný koučink mladších žáků, které prokazatelně dovede k zisku stužek AWD L1–L3.' }
+                }
+            }
+        ];
+
+        function createRibbonSVG(id, catId, catData, lvl) {
+            const uid = `rb${id}_${catId}_${lvl}`;
+            const W = 140, H = 48;
+            const white = '#FFFFFF';
+            const cx = 100;
+            const divX = 52;
+
+            let devices = '';
+            if (lvl === 2) {
+                devices = `<circle cx="${cx}" cy="${H/2}" r="5" fill="${white}" opacity="0.92"/>`;
+            } else if (lvl === 3) {
+                devices = `
+                    <circle cx="${cx - 10}" cy="${H/2}" r="5" fill="${white}" opacity="0.92"/>
+                    <circle cx="${cx + 10}" cy="${H/2}" r="5" fill="${white}" opacity="0.92"/>`;
+            } else if (lvl === 4) {
+                devices = `
+                    <circle cx="${cx - 20}" cy="${H/2}" r="5" fill="${white}" opacity="0.92"/>
+                    <circle cx="${cx}"    cy="${H/2}" r="5" fill="${white}" opacity="0.92"/>
+                    <circle cx="${cx + 20}" cy="${H/2}" r="5" fill="${white}" opacity="0.92"/>`;
+            } else if (lvl === 5) {
+                const s = cx, sy = H/2;
+                devices = `<polygon points="
+                    ${s},${sy - 11} ${s + 3.5},${sy - 4} ${s + 11},${sy - 4}
+                    ${s + 5},${sy + 2} ${s + 7},${sy + 9} ${s},${sy + 5}
+                    ${s - 7},${sy + 9} ${s - 5},${sy + 2} ${s - 11},${sy - 4}
+                    ${s - 3.5},${sy - 4}"
+                    fill="${white}" opacity="0.95"/>`;
+            }
+
+            return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="${uid}_bg" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%"   stop-color="${catData.light}" stop-opacity="1"/>
+                  <stop offset="100%" stop-color="${catData.base}"  stop-opacity="1"/>
+                </linearGradient>
+                <clipPath id="${uid}_clip">
+                  <rect width="${W}" height="${H}" rx="3"/>
+                </clipPath>
+              </defs>
+              <rect width="${W}" height="${H}" rx="3" fill="url(#${uid}_bg)"/>
+              <rect width="${divX}" height="${H}" fill="black" opacity="0.22" clip-path="url(#${uid}_clip)"/>
+              <text
+                x="${divX / 2}" y="${H / 2 + 1}"
+                text-anchor="middle" dominant-baseline="middle"
+                font-family="'Raleway', sans-serif"
+                font-size="${catId.length <= 2 ? 14 : 11}" font-weight="700"
+                fill="${white}" opacity="0.95"
+                letter-spacing="${catId.length <= 2 ? 2 : 1}"
+              >${catId}</text>
+              ${devices}
+              <rect width="${W}" height="2" rx="1" fill="white" opacity="0.08"/>
+            </svg>`;
+        }
+
+        function renderOverview() {
+            const container = document.getElementById('categories-container');
+            const navContainer = document.getElementById('quick-nav');
+            let html = '';
+            let navHtml = '';
+            
+            let svgId = 0;
+
+            CATEGORIES_DATA.forEach(cat => {
+                // Přidání L5 stužky do navigace
+                svgId++;
+                navHtml += `
+                    <a href="#cat-${cat.id}" title="Přejít na ${cat.title}">
+                        ${createRibbonSVG(svgId, cat.id, cat, 5)}
+                    </a>
+                `;
+
+                html += `
+                <div id="cat-${cat.id}" class="category-card" style="--cat-color: ${cat.light};">
+                    <div class="category-header">
+                        <div class="category-title">
+                            <span class="category-abbr">${cat.id}</span>
+                            ${cat.title}
+                        </div>
+                        <div class="category-desc">${cat.desc}</div>
+                    </div>
+                    <div class="level-list">
+                `;
+
+                for (let lvl = 1; lvl <= 5; lvl++) {
+                    svgId++;
+                    const lvlData = cat.levels[lvl];
+                    const lvlName = lvlData.name || DEFAULT_LEVEL_NAMES[lvl];
+                    
+                    html += `
+                        <div class="level-item">
+                            <div class="level-ribbon">
+                                ${createRibbonSVG(svgId, cat.id, cat, lvl)}
+                            </div>
+                            <div class="level-content">
+                                <div class="level-title">
+                                    ${lvlName} <span class="level-lvl">(L${lvl})</span>
+                                </div>
+                                <div class="level-req">${lvlData.req}</div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                html += `
+                    </div>
+                </div>
+                `;
+            });
+
+            navContainer.innerHTML = navHtml;
+            container.innerHTML = html;
+        }
+
+        renderOverview();
+    </script>
+</body>
+
+</html>
