@@ -1,4 +1,11 @@
 <?php
+session_set_cookie_params([
+    'lifetime' => 0,
+    'path'     => '/',
+    'secure'   => (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') || ($_SERVER['SERVER_PORT'] == 443),
+    'httponly' => true,
+    'samesite' => 'Lax',
+]);
 session_start();
 require_once __DIR__ . '/config.php';
 
@@ -6,7 +13,10 @@ initDb();
 
 // ─── Validace JWT tokenu z microsoft-sso-hub ─────────────────────────────────
 function validateSsoJwt(string $token): ?array {
-    if (SSO_JWT_SECRET === '') return null;
+    if (SSO_JWT_SECRET === '') {
+        error_log('[silicon-ribbons] validateSsoJwt: SSO_JWT_SECRET není nakonfigurován — validace tokenu přeskočena');
+        return null;
+    }
     $parts = explode('.', $token);
     if (count($parts) !== 3) return null;
     [$header, $payload, $sig] = $parts;
@@ -47,6 +57,7 @@ if (isset($_GET['token']) && empty($_SESSION['teacher_email'])) {
         if (!empty($email) && in_array($email, $ALLOWED_TEACHERS, true)) {
             session_regenerate_id(true);
             $_SESSION['teacher_email'] = $email;
+            $_SESSION['teacher_name']  = $userData['displayName'] ?? $email;
             header('Location: admin.php');
             exit;
         }
@@ -63,6 +74,12 @@ $callbackUrl = ((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? 'http
     . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost')
     . ($_SERVER['SCRIPT_NAME'] ?? '/admin.php');
 $ssoLoginUrl = SSO_HUB_URL . '?callback=' . urlencode($callbackUrl);
+
+// Auto-redirect k přihlášení — přeskočit mezistránku s tlačítkem
+if (!$isLoggedIn && empty($loginError)) {
+    header('Location: ' . $ssoLoginUrl);
+    exit;
+}
 ?>
 <!DOCTYPE html>
 <html lang="cs">
@@ -197,7 +214,7 @@ $ssoLoginUrl = SSO_HUB_URL . '?callback=' . urlencode($callbackUrl);
                 </div>
                 <div class="form-group">
                     <label>Udělil(a)</label>
-                    <input type="text" name="granted_by" required value="<?= htmlspecialchars($_SESSION['teacher_email']) ?>" placeholder="Jméno nebo e-mail učitele">
+                    <input type="text" name="granted_by" required value="<?= htmlspecialchars($_SESSION['teacher_name'] ?? $_SESSION['teacher_email']) ?>" placeholder="Jméno nebo e-mail učitele">
                 </div>
                 <div class="form-group">
                     <label>Zdůvodnění (volitelné)</label>
