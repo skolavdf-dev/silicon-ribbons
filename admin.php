@@ -44,8 +44,16 @@ $loginError = '';
 
 // ─── Odhlášení ────────────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['_action'] ?? '') === 'logout') {
+    $_SESSION = [];
+    $cookieParams = session_get_cookie_params();
+    setcookie(session_name(), '', time() - 3600,
+        $cookieParams['path'],
+        $cookieParams['domain'],
+        $cookieParams['secure'],
+        $cookieParams['httponly']
+    );
     session_destroy();
-    header('Location: admin.php');
+    header('Location: admin.php?logged_out=1');
     exit;
 }
 
@@ -76,7 +84,8 @@ $callbackUrl = ((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? 'http
 $ssoLoginUrl = SSO_HUB_URL . '?callback=' . urlencode($callbackUrl);
 
 // Auto-redirect k přihlášení — přeskočit mezistránku s tlačítkem
-if (!$isLoggedIn && empty($loginError)) {
+// Potlačit auto-redirect po záměrném odhlášení, aby SSO nevlezlo hned zpět
+if (!$isLoggedIn && empty($loginError) && !isset($_GET['logged_out'])) {
     header('Location: ' . $ssoLoginUrl);
     exit;
 }
@@ -130,7 +139,9 @@ if (!$isLoggedIn && empty($loginError)) {
 <section class="section" style="max-width:400px;margin:0 auto">
     <p class="section-label">Přihlášení administrátora</p>
     <div class="panel" style="padding:2rem;text-align:center">
-        <?php if (!empty($loginError)): ?>
+        <?php if (isset($_GET['logged_out'])): ?>
+        <div class="alert alert-success" style="text-align:left;margin-bottom:1.5rem">Byli jste úspěšně odhlášeni.</div>
+        <?php elseif (!empty($loginError)): ?>
         <div class="alert alert-error" style="text-align:left;margin-bottom:1.5rem"><?= htmlspecialchars($loginError) ?></div>
         <?php endif; ?>
         <p style="color:var(--muted);margin:0 0 1.5rem">
