@@ -1,25 +1,163 @@
 <?php
 
-define('DB_PATH', __DIR__ . '/data/merits.db');
+// ─── Ošetření chyb pro produkci ───────────────────────────────────────────────
+// Výpis chyb je vypnutý, dokud config.local.php nenastaví 'env' => 'local'.
+// Prostředí se NEODVOZUJE z hlavičky Host (klient by ji mohl podvrhnout).
+error_reporting(E_ALL);
+ini_set('display_errors', '0');
+ini_set('display_startup_errors', '0');
+ini_set('log_errors', '1');
+
+set_exception_handler(static function (Throwable $e): void {
+    error_log('[silicon-ribbons] ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+    http_response_code(500);
+    $local = defined('IS_LOCAL_ENV') && IS_LOCAL_ENV;
+    if (str_ends_with($_SERVER['SCRIPT_NAME'] ?? '', 'api.php')) {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['error' => $local ? $e->getMessage() : 'Interní chyba serveru.']);
+        return;
+    }
+    header('Content-Type: text/plain; charset=utf-8');
+    echo $local
+        ? "Neošetřená chyba: {$e->getMessage()}\n{$e->getFile()}:{$e->getLine()}"
+        : 'Došlo k neočekávané chybě. Zkuste to prosím znovu později.';
+});
 
 // ─── Načtení lokální konfigurace (config.local.php – není v gitu) ─────────────
+// Nejlépe mimo DocumentRoot: cesta v proměnné prostředí MERITS_CONFIG.
+$_localCfgPath = getenv('MERITS_CONFIG') ?: (__DIR__ . '/config.local.php');
 $_localCfg = [];
-if (file_exists(__DIR__ . '/config.local.php')) {
-    $_localCfg = require __DIR__ . '/config.local.php';
+if (is_file($_localCfgPath)) {
+    $_loaded = require $_localCfgPath;
+    if (is_array($_loaded)) {
+        $_localCfg = $_loaded;
+    }
+    unset($_loaded);
 }
+unset($_localCfgPath);
+
+// 'production' (výchozí) | 'local' (vývojový stroj: výpis chyb, cookie cesta '/')
+define('IS_LOCAL_ENV', ($_localCfg['env'] ?? 'production') === 'local');
+if (IS_LOCAL_ENV) {
+    ini_set('display_errors', '1');
+    ini_set('display_startup_errors', '1');
+}
+
+// Veřejný origin aplikace (schéma + host). Z něj se skládá callback pro hub
+// a kontroluje hlavička Origin u zápisových požadavků (CSRF).
+define('APP_ORIGIN', rtrim($_localCfg['app_origin'] ?? 'https://www.skolavdf.cz', '/'));
+
+// Databáze: nejlépe mimo DocumentRoot (config.local.php: 'db_path').
+define('DB_PATH', $_localCfg['db_path'] ?? (__DIR__ . '/data/merits.db'));
 
 // ─── Microsoft SSO Hub integrace ─────────────────────────────────────────────
 define('SSO_HUB_URL',    $_localCfg['sso_hub_url']    ?? 'https://www.skolavdf.cz/hub/auth/');
-define('SSO_JWT_SECRET', $_localCfg['sso_jwt_secret'] ?? '');
 
-// ─── Povolené e-maily učitelů pro admin rozhraní ─────────────────────────────
-$ALLOWED_TEACHERS = $_localCfg['allowed_teachers'] ?? [
-    'michal.bubilek@skolavdf.cz',
-    'petr.kozak@skolavdf.cz',
-    'jan.skoda@skolavdf.cz',
-];
+// Přihlášení běží přes sdílenou session hubu (stejně jako mailer a portfolio):
+// hub zapíše profil do $_SESSION[SSO_SESSION_KEY], aplikace ho jen čte.
+// Žádné tajemství se v aplikaci neukládá. Hodnoty MUSÍ odpovídat hubu.
+define('SSO_SESSION_KEY',           $_localCfg['sso_session_key']           ?? 'user');
+define('SSO_SESSION_COOKIE_NAME',   $_localCfg['sso_session_cookie_name']   ?? 'skolavdf_hub_sso');
+define('SSO_SESSION_COOKIE_DOMAIN', $_localCfg['sso_session_cookie_domain'] ?? '.skolavdf.cz');
+
+// Sůl pro anonymní kódy žáků. Prázdná = původní (zveřejněná) sůl kvůli zpětné
+// kompatibilitě kódů. Nastavením vlastní soli se VŠECHNY kódy změní.
+define('ANON_SALT', (string) ($_localCfg['anon_salt'] ?? ''));
+
+// ─── Učitelé s přístupem do administrace ─────────────────────────────────────
+// UPN (přihlašovací jména v Entra ID), bez ohledu na velikost písmen.
+// Bez výchozího seznamu: bez `allowed_teachers` v config.local.php nemá přístup nikdo.
+$ALLOWED_TEACHERS = array_values(array_unique(array_filter(array_map(
+    static fn($u) => strtolower(trim((string) $u)),
+    (array) ($_localCfg['allowed_teachers'] ?? [])
+))));
 
 unset($_localCfg);
+
+// ─── Přihlášení: sdílená session hubu (jen ke čtení) ─────────────────────────
+// Aplikace session hubu nikdy nezapisuje (read_and_close) a nemá vlastní.
+// Výjimkou je odhlášení (destroySsoSession), které session hubu zničí.
+function sharedSessionParams(): void {
+    session_name(SSO_SESSION_COOKIE_NAME);
+    session_set_cookie_params([
+        'lifetime' => 0,
+        'path'     => '/',
+        'domain'   => IS_LOCAL_ENV ? '' : SSO_SESSION_COOKIE_DOMAIN,
+        'secure'   => !IS_LOCAL_ENV || (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on'),
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ]);
+}
+
+/** Otevře sdílenou session jen pro čtení (zamknutí se hned uvolní). */
+function startAppSession(): void {
+    if (session_status() === PHP_SESSION_ACTIVE || !isset($_COOKIE[SSO_SESSION_COOKIE_NAME])) {
+        return;
+    }
+    sharedSessionParams();
+    session_start(['read_and_close' => true]);
+}
+
+/** Profil přihlášeného uživatele z hubu (bez ohledu na oprávnění), nebo null. */
+function ssoSessionUser(): ?array {
+    startAppSession();
+    $u = $_SESSION[SSO_SESSION_KEY] ?? null;
+    return is_array($u) ? $u : null;
+}
+
+/**
+ * Přihlášený učitel s oprávněním do administrace, nebo null.
+ * Oprávnění se určuje podle UPN (spravuje admin tenantu), ne podle atributu `mail`.
+ *
+ * @return array{upn: string, name: string}|null
+ */
+function currentTeacher(): ?array {
+    $u = ssoSessionUser();
+    if ($u === null) {
+        return null;
+    }
+    $upn = strtolower(trim((string) ($u['userPrincipalName'] ?? '')));
+    global $ALLOWED_TEACHERS;
+    if ($upn === '' || !in_array($upn, $ALLOWED_TEACHERS, true)) {
+        return null;
+    }
+    $name = trim((string) ($u['displayName'] ?? ''));
+    return ['upn' => $upn, 'name' => $name !== '' ? $name : $upn];
+}
+
+/** Je přihlášený oprávněný učitel? */
+function isAdminSession(): bool {
+    return currentTeacher() !== null;
+}
+
+/** Odhlášení: zničí sdílenou session hubu (platí pro všechny aplikace hubu na doméně). */
+function destroySsoSession(): void {
+    if (!isset($_COOKIE[SSO_SESSION_COOKIE_NAME])) {
+        return;
+    }
+    sharedSessionParams();
+    session_start();
+    $_SESSION = [];
+    $p = session_get_cookie_params();
+    setcookie(session_name(), '', [
+        'expires'  => time() - 42000,
+        'path'     => $p['path'],
+        'domain'   => $p['domain'],
+        'secure'   => $p['secure'],
+        'httponly' => $p['httponly'],
+        'samesite' => 'Lax',
+    ]);
+    session_destroy();
+}
+
+/** Origin aplikace pro callback na hub: pevný (APP_ORIGIN); lokálně aktuální Host. */
+function appOrigin(): string {
+    if (IS_LOCAL_ENV) {
+        $https = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on';
+        return ($https ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
+    }
+    return APP_ORIGIN;
+}
 
 $CATEGORIES = [
     'DEV' => [
@@ -158,6 +296,13 @@ function initDb(): void {
         );
         CREATE INDEX IF NOT EXISTS idx_merits_student ON merits(student_id);
         CREATE INDEX IF NOT EXISTS idx_merits_cat_lvl ON merits(category, level);
+        CREATE TABLE IF NOT EXISTS audit_log (
+            id      INTEGER  PRIMARY KEY AUTOINCREMENT,
+            at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            actor   TEXT     NOT NULL,
+            action  TEXT     NOT NULL,
+            details TEXT
+        );
     ");
 
     // Seed demo data pokud je DB prázdná
@@ -218,8 +363,17 @@ function seedDemoData(PDO $db): void {
     }
 }
 
+/** Záznam o změně dat: kdo, co (bez osobních údajů žáků, jen ID a hodnoty). */
+function auditLog(string $action, array $details = []): void {
+    $actor = currentTeacher()['upn'] ?? '-';
+    getDb()->prepare('INSERT INTO audit_log (actor, action, details) VALUES (?,?,?)')
+        ->execute([$actor, $action, json_encode($details, JSON_UNESCAPED_UNICODE)]);
+}
+
 function anonymousId(int $studentId, int $admissionYear): string {
-    $hash = strtoupper(substr(hash('sha256', $studentId . 'sr_salt_2026'), 0, 4));
+    $hash = ANON_SALT !== ''
+        ? strtoupper(substr(hash_hmac('sha256', (string) $studentId, ANON_SALT), 0, 4))
+        : strtoupper(substr(hash('sha256', $studentId . 'sr_salt_2026'), 0, 4));
     $yy = substr((string)$admissionYear, 2, 2);
     return "#{$yy}{$hash}";
 }

@@ -1,86 +1,46 @@
 <?php
-session_set_cookie_params([
-    'lifetime' => 0,
-    'path'     => '/',
-    'secure'   => (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') || ($_SERVER['SERVER_PORT'] == 443),
-    'httponly' => true,
-    'samesite' => 'Lax',
-]);
-session_start();
 require_once __DIR__ . '/config.php';
+startAppSession();
 
 initDb();
-
-// ─── Validace JWT tokenu z microsoft-sso-hub ─────────────────────────────────
-function validateSsoJwt(string $token): ?array {
-    if (SSO_JWT_SECRET === '') {
-        error_log('[silicon-ribbons] validateSsoJwt: SSO_JWT_SECRET není nakonfigurován — validace tokenu přeskočena');
-        return null;
-    }
-    $parts = explode('.', $token);
-    if (count($parts) !== 3) return null;
-    [$header, $payload, $sig] = $parts;
-
-    $decode = function (string $s): string {
-        $b64 = str_replace(['-', '_'], ['+', '/'], $s);
-        $pad = strlen($b64) % 4;
-        if ($pad) $b64 .= str_repeat('=', 4 - $pad);
-        return base64_decode($b64);
-    };
-
-    $expected = str_replace(['+', '/', '='], ['-', '_', ''],
-        base64_encode(hash_hmac('sha256', "$header.$payload", SSO_JWT_SECRET, true))
-    );
-    if (!hash_equals($expected, $sig)) return null;
-
-    $data = json_decode($decode($payload), true);
-    if (!is_array($data)) return null;
-    if (isset($data['exp']) && $data['exp'] < time()) return null;
-
-    return $data['user'] ?? null;
-}
 
 $loginError = '';
 
 // ─── Odhlášení ────────────────────────────────────────────────────────────────
+// Zničí sdílenou session hubu, tedy odhlásí uživatele ze všech aplikací hubu.
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['_action'] ?? '') === 'logout') {
-    $_SESSION = [];
-    $cookieParams = session_get_cookie_params();
-    setcookie(session_name(), '', time() - 3600,
-        $cookieParams['path'],
-        $cookieParams['domain'],
-        $cookieParams['secure'],
-        $cookieParams['httponly']
-    );
-    session_destroy();
+    destroySsoSession();
     header('Location: admin.php?logged_out=1');
     exit;
 }
 
-// ─── Zpracování SSO callback (JWT token z microsoft-sso-hub) ─────────────────
-if (isset($_GET['token']) && empty($_SESSION['teacher_email'])) {
-    $userData = validateSsoJwt($_GET['token']);
-    if ($userData !== null) {
-        $email = $userData['mail'] ?? $userData['userPrincipalName'] ?? '';
-        if (!empty($email) && in_array($email, $ALLOWED_TEACHERS, true)) {
-            session_regenerate_id(true);
-            $_SESSION['teacher_email'] = $email;
-            $_SESSION['teacher_name']  = $userData['displayName'] ?? $email;
-            header('Location: admin.php');
-            exit;
-        }
-        $loginError = 'Váš Microsoft účet (' . htmlspecialchars($email) . ') nemá oprávnění pro přístup do administrace.';
-    } else {
-        $loginError = 'Přihlašovací token je neplatný nebo vypršel. Přihlaste se prosím znovu.';
-    }
+// ─── Návrat z hubu ───────────────────────────────────────────────────────────
+// Hub k callbacku může připojit ?token=… — nepotřebujeme ho (identitu čteme ze
+// sdílené session), tak ho jednou přesměrováním odstraníme z URL.
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['token'])) {
+    header('Location: admin.php' . (isset($_GET['from_sso']) ? '?from_sso=1' : ''));
+    exit;
 }
 
-$isLoggedIn = !empty($_SESSION['teacher_email']) && in_array($_SESSION['teacher_email'], $ALLOWED_TEACHERS, true);
+$ssoUser    = ssoSessionUser();
+$teacher    = currentTeacher();
+$isLoggedIn = $teacher !== null;
+
+if ($isLoggedIn && isset($_GET['from_sso'])) {
+    header('Location: admin.php');
+    exit;
+}
+
+if ($ssoUser !== null && !$isLoggedIn) {
+    $loginError = 'Váš Microsoft účet (' . htmlspecialchars(trim((string) ($ssoUser['userPrincipalName'] ?? ''))) . ') nemá oprávnění pro přístup do administrace.';
+} elseif ($ssoUser === null && isset($_GET['from_sso'])) {
+    // Ochrana proti nekonečnému přesměrování hub ↔ aplikace
+    $loginError = 'Přihlášení se nepodařilo dokončit (sdílená relace nebyla nalezena). Zkuste to prosím znovu.';
+}
 
 // ─── URL pro přesměrování na SSO Hub ─────────────────────────────────────────
-$callbackUrl = ((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? 'https' : 'http')
-    . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost')
-    . ($_SERVER['SCRIPT_NAME'] ?? '/admin.php');
+// Origin je pevný (APP_ORIGIN), ne z hlavičky Host; lokálně se použije aktuální Host.
+$callbackUrl = appOrigin() . ($_SERVER['SCRIPT_NAME'] ?? '/admin.php') . '?from_sso=1';
 $ssoLoginUrl = SSO_HUB_URL . '?callback=' . urlencode($callbackUrl);
 
 // Auto-redirect k přihlášení — přeskočit mezistránku s tlačítkem
@@ -225,7 +185,7 @@ if (!$isLoggedIn && empty($loginError) && !isset($_GET['logged_out'])) {
                 </div>
                 <div class="form-group">
                     <label>Udělil(a)</label>
-                    <input type="text" name="granted_by" required value="<?= htmlspecialchars($_SESSION['teacher_name'] ?? $_SESSION['teacher_email']) ?>" placeholder="Jméno nebo e-mail učitele">
+                    <input type="text" name="granted_by" required value="<?= htmlspecialchars($teacher['name'] ?? '') ?>" placeholder="Jméno nebo e-mail učitele">
                 </div>
                 <div class="form-group">
                     <label>Zdůvodnění (volitelné)</label>

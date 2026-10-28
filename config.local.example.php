@@ -6,17 +6,31 @@
  * Soubor config.local.php je v .gitignore a NIKDY se necommituje.
  */
 return [
-    // Povinné: JWT secret sdílený s microsoft-sso-hub.
-    // Musí být shodný s hodnotou  jwt.secret  v souboru
-    // microsoft-sso-hub/src/config.local.php
-    'sso_jwt_secret' => 'ZDE_VLOZIT_SDILENY_JWT_SECRET_Z_SSO_HUB',
+    // Přihlášení běží přes sdílenou session hubu (jako mailer a portfolio):
+    // žádné tajemství se tu nekonfiguruje. Hodnoty session musí odpovídat hubu,
+    // výchozí hodnoty stačí (skolavdf_hub_sso, .skolavdf.cz, klíč 'user').
+    // 'sso_session_cookie_name'   => 'skolavdf_hub_sso',
+    // 'sso_session_cookie_domain' => '.skolavdf.cz',
+    // 'sso_session_key'           => 'user',
+
+    // Povinné: UPN (přihlašovací jména v Entra ID) učitelů s přístupem do administrace.
+    // Bez tohoto klíče nemá přístup nikdo.
+    'allowed_teachers' => ['jmeno.prijmeni@skolavdf.cz'],
+
+    // 'production' (výchozí) | 'local' (vývojový stroj: výpis chyb, cookie cesta '/')
+    // 'env' => 'local',
+
+    // Veřejný origin aplikace (výchozí https://www.skolavdf.cz)
+    // 'app_origin' => 'https://www.skolavdf.cz',
+
+    // Volitelné: databáze mimo DocumentRoot
+    // 'db_path' => '/var/lib/skolavdf/merits.db',
+
+    // Volitelné: vlastní sůl pro anonymní kódy žáků. POZOR: změní všechny kódy.
+    // 'anon_salt' => 'DLOUHY_NAHODNY_RETEZEC',
 
     // Volitelné: přepsání URL přihlašovací stránky SSO Hubu
     // (užitečné pro lokální vývoj nebo jiné prostředí)
     // 'sso_hub_url' => 'http://localhost/hub/auth/',
 
-    // Volitelné: přepsání seznamu povolených e-mailových adres učitelů
-    // 'allowed_teachers' => [
-    //     'ucitel@skolavdf.cz',
-    // ],
 ];

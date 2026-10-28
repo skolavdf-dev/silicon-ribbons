@@ -23,23 +23,23 @@ try {
             echo json_encode($CATEGORIES);
             break;
         case 'add_merit':
-            requireAdmin();
+            requireAdmin(true);
             echo json_encode(addMerit());
             break;
         case 'add_student':
-            requireAdmin();
+            requireAdmin(true);
             echo json_encode(addStudent());
             break;
         case 'update_student':
-            requireAdmin();
+            requireAdmin(true);
             echo json_encode(updateStudent());
             break;
         case 'delete_merit':
-            requireAdmin();
+            requireAdmin(true);
             echo json_encode(deleteMerit());
             break;
         case 'delete_student':
-            requireAdmin();
+            requireAdmin(true);
             echo json_encode(deleteStudent());
             break;
         case 'admin_students':
@@ -49,8 +49,9 @@ try {
         default:
             httpError(400, 'Neznámá akce');
     }
-} catch (Exception $e) {
-    httpError(500, $e->getMessage());
+} catch (Throwable $e) {
+    error_log('[silicon-ribbons] ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+    httpError(500, IS_LOCAL_ENV ? $e->getMessage() : 'Interní chyba serveru.');
 }
 
 // ─── Veřejné GET endpointy ────────────────────────────────────────────────────
@@ -142,6 +143,16 @@ function getStudentDetail(int $id): array {
     $m->execute([$id]);
     $merits = $m->fetchAll(PDO::FETCH_ASSOC);
 
+    // Neveřejní žáci: popis a autor ocenění (volný text od učitele) se veřejně nevrací,
+    // mohly by žáka identifikovat. Přihlášený učitel vidí vše.
+    if (!(bool)$student['is_public'] && !isAdminSession()) {
+        foreach ($merits as &$mm) {
+            $mm['granted_by']  = '';
+            $mm['description'] = null;
+        }
+        unset($mm);
+    }
+
     $score = array_sum(array_column($merits, 'level'));
 
     return [
@@ -156,76 +167,128 @@ function getStudentDetail(int $id): array {
 
 // ─── Admin POST endpointy ─────────────────────────────────────────────────────
 
+/** Textové pole z JSON těla: typ, povinnost, ořez a max. délka. */
+function strField(array $data, string $key, int $max, bool $required = true): ?string {
+    $v = $data[$key] ?? null;
+    if ($v === null || $v === '') {
+        if ($required) { httpError(400, "Chybí pole: {$key}"); }
+        return null;
+    }
+    if (!is_string($v)) { httpError(400, "Neplatné pole: {$key}"); }
+    $v = trim($v);
+    if ($v === '') {
+        if ($required) { httpError(400, "Chybí pole: {$key}"); }
+        return null;
+    }
+    if (mb_strlen($v) > $max) { httpError(400, "Pole {$key} je příliš dlouhé (max. {$max} znaků)"); }
+    return $v;
+}
+
+function intField(array $data, string $key, int $min, int $max): int {
+    $v = filter_var($data[$key] ?? null, FILTER_VALIDATE_INT);
+    if ($v === false || $v < $min || $v > $max) { httpError(400, "Neplatné pole: {$key}"); }
+    return $v;
+}
+
+function studentExists(PDO $db, int $id): bool {
+    $s = $db->prepare('SELECT 1 FROM students WHERE id = ?');
+    $s->execute([$id]);
+    return (bool) $s->fetchColumn();
+}
+
 function addMerit(): array {
     $data = jsonBody();
-    $required = ['student_id', 'category', 'level', 'granted_by'];
-    foreach ($required as $f) {
-        if (empty($data[$f])) { httpError(400, "Chybí pole: {$f}"); }
-    }
     global $CATEGORIES;
-    $level = (int)$data['level'];
-    if ($level < 1 || $level > 5) { httpError(400, 'Level musí být 1–5'); }
-    if (!isset($CATEGORIES[$data['category']])) { httpError(400, 'Neznámá kategorie'); }
+    $studentId = intField($data, 'student_id', 1, PHP_INT_MAX);
+    $category  = strField($data, 'category', 10);
+    if (!isset($CATEGORIES[$category])) { httpError(400, 'Neznámá kategorie'); }
+    $level     = intField($data, 'level', 1, 5);
+    $grantedBy = strField($data, 'granted_by', 100);
+    $desc      = strField($data, 'description', 500, false);
 
-    $db   = getDb();
-    $stmt = $db->prepare('INSERT OR REPLACE INTO merits (student_id, category, level, granted_by, description) VALUES (?,?,?,?,?)');
+    $db = getDb();
+    if (!studentExists($db, $studentId)) { httpError(404, 'Student nenalezen'); }
+
+    // Stejná kombinace student+kategorie+level ocenění aktualizuje (id zůstává stejné)
+    $stmt = $db->prepare('
+        INSERT INTO merits (student_id, category, level, granted_by, description)
+        VALUES (?,?,?,?,?)
+        ON CONFLICT(student_id, category, level) DO UPDATE SET
+            granted_by = excluded.granted_by,
+            description = excluded.description,
+            granted_at = CURRENT_TIMESTAMP
+    ');
     $stmt->execute([
-        (int)$data['student_id'],
-        $data['category'],
+        $studentId,
+        $category,
         $level,
-        htmlspecialchars($data['granted_by'], ENT_QUOTES),
-        isset($data['description']) ? htmlspecialchars($data['description'], ENT_QUOTES) : null,
+        htmlspecialchars($grantedBy, ENT_QUOTES),
+        $desc !== null ? htmlspecialchars($desc, ENT_QUOTES) : null,
     ]);
-    return ['ok' => true, 'id' => (int)$db->lastInsertId()];
+    $idStmt = $db->prepare('SELECT id FROM merits WHERE student_id = ? AND category = ? AND level = ?');
+    $idStmt->execute([$studentId, $category, $level]);
+    $id = (int) $idStmt->fetchColumn();
+
+    auditLog('add_merit', ['id' => $id, 'student_id' => $studentId, 'category' => $category, 'level' => $level]);
+    return ['ok' => true, 'id' => $id];
 }
 
 function addStudent(): array {
     $data = jsonBody();
-    foreach (['lastname', 'firstname', 'admission_year'] as $f) {
-        if (empty($data[$f])) { httpError(400, "Chybí pole: {$f}"); }
-    }
-    $year = (int)$data['admission_year'];
-    if ($year < 2000 || $year > 2099) { httpError(400, 'Neplatný rok nástupu'); }
+    $last  = strField($data, 'lastname', 100);
+    $first = strField($data, 'firstname', 100);
+    $year  = intField($data, 'admission_year', 2000, 2099);
 
     $db   = getDb();
     $stmt = $db->prepare('INSERT INTO students (lastname, firstname, admission_year, is_public) VALUES (?,?,?,?)');
     $stmt->execute([
-        htmlspecialchars(trim($data['lastname']), ENT_QUOTES),
-        htmlspecialchars(trim($data['firstname']), ENT_QUOTES),
+        htmlspecialchars($last, ENT_QUOTES),
+        htmlspecialchars($first, ENT_QUOTES),
         $year,
-        isset($data['is_public']) && $data['is_public'] ? 1 : 0,
+        !empty($data['is_public']) ? 1 : 0,
     ]);
-    return ['ok' => true, 'id' => (int)$db->lastInsertId()];
+    $id = (int) $db->lastInsertId();
+    auditLog('add_student', ['id' => $id, 'admission_year' => $year]);
+    return ['ok' => true, 'id' => $id];
 }
 
 function updateStudent(): array {
-    $data = jsonBody();
-    if (empty($data['id'])) { httpError(400, 'Chybí id'); }
+    $data  = jsonBody();
+    $id    = intField($data, 'id', 1, PHP_INT_MAX);
+    $last  = strField($data, 'lastname', 100);
+    $first = strField($data, 'firstname', 100);
+    $year  = intField($data, 'admission_year', 2000, 2099);
+
     $db = getDb();
+    if (!studentExists($db, $id)) { httpError(404, 'Student nenalezen'); }
+    $isPublic = !empty($data['is_public']) ? 1 : 0;
     $stmt = $db->prepare('UPDATE students SET lastname=?, firstname=?, admission_year=?, is_public=? WHERE id=?');
     $stmt->execute([
-        htmlspecialchars(trim($data['lastname']), ENT_QUOTES),
-        htmlspecialchars(trim($data['firstname']), ENT_QUOTES),
-        (int)$data['admission_year'],
-        isset($data['is_public']) && $data['is_public'] ? 1 : 0,
-        (int)$data['id'],
+        htmlspecialchars($last, ENT_QUOTES),
+        htmlspecialchars($first, ENT_QUOTES),
+        $year,
+        $isPublic,
+        $id,
     ]);
+    auditLog('update_student', ['id' => $id, 'admission_year' => $year, 'is_public' => $isPublic]);
     return ['ok' => true];
 }
 
 function deleteMerit(): array {
     $data = jsonBody();
-    if (empty($data['id'])) { httpError(400, 'Chybí id'); }
+    $id = intField($data, 'id', 1, PHP_INT_MAX);
     $db = getDb();
-    $db->prepare('DELETE FROM merits WHERE id = ?')->execute([(int)$data['id']]);
+    $db->prepare('DELETE FROM merits WHERE id = ?')->execute([$id]);
+    auditLog('delete_merit', ['id' => $id]);
     return ['ok' => true];
 }
 
 function deleteStudent(): array {
     $data = jsonBody();
-    if (empty($data['id'])) { httpError(400, 'Chybí id'); }
+    $id = intField($data, 'id', 1, PHP_INT_MAX);
     $db = getDb();
-    $db->prepare('DELETE FROM students WHERE id = ?')->execute([(int)$data['id']]);
+    $db->prepare('DELETE FROM students WHERE id = ?')->execute([$id]);
+    auditLog('delete_student', ['id' => $id]);
     return ['ok' => true];
 }
 
@@ -278,14 +341,38 @@ function jsonBody(): array {
     return $data;
 }
 
-function requireAdmin(): void {
-    session_start();
-    if (empty($_SESSION['teacher_email'])) {
+/** Zápisový požadavek musí přijít z naší stránky (ochrana proti CSRF; doplněk k SameSite=Lax). */
+function requireSameOrigin(): void {
+    $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+    if ($origin !== '') {
+        $ok = $origin === APP_ORIGIN;
+        if (!$ok && IS_LOCAL_ENV) {
+            $ok = parse_url($origin, PHP_URL_HOST) === parse_url('http://' . ($_SERVER['HTTP_HOST'] ?? ''), PHP_URL_HOST);
+        }
+    } else {
+        // Bez Origin povolit jen prohlížečem potvrzený požadavek ze stejného originu
+        $ok = ($_SERVER['HTTP_SEC_FETCH_SITE'] ?? '') === 'same-origin';
+    }
+    if (!$ok) {
+        httpError(403, 'Neplatný původ požadavku');
+    }
+}
+
+function requireAdmin(bool $write = false): void {
+    if (ssoSessionUser() === null) {
         httpError(401, 'Nepřihlášen');
     }
-    global $ALLOWED_TEACHERS;
-    if (!in_array($_SESSION['teacher_email'], $ALLOWED_TEACHERS, true)) {
+    if (currentTeacher() === null) {
         httpError(403, 'Přístup odepřen');
+    }
+    if ($write) {
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            httpError(405, 'Metoda není povolena');
+        }
+        if (stripos($_SERVER['CONTENT_TYPE'] ?? '', 'application/json') !== 0) {
+            httpError(415, 'Očekáván application/json');
+        }
+        requireSameOrigin();
     }
 }
 

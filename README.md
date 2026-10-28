@@ -39,7 +39,20 @@ merits/
 
 1. Zkopírujte projektový adresář na webový server s PHP 8.x a povoleným SQLite rozšířením.
 2. Zkontrolujte oprávnění zápisu pro složku `data/` (PHP zde vytvoří a zapisuje do `merits.db`).
-3. Zkopírujte `config.local.example.php` jako `config.local.php` a doplňte `sso_jwt_secret` — musí být shodný s hodnotou `jwt.secret` v konfiguraci [microsoft-sso-hub](https://github.com/skolavdf-dev/microsoft-sso-hub).
+3. Zkopírujte `config.local.example.php` jako `config.local.php` a doplňte `allowed_teachers` (UPN učitelů). Přihlášení běží přes sdílenou session hubu ([microsoft-sso-hub](https://github.com/skolavdf-dev/microsoft-sso-hub)), žádné tajemství se v aplikaci neukládá.
 4. Otevřete `index.php` v prohlížeči — databáze se automaticky inicializuje se vzorovými daty.
 
 > **Poznámka:** Soubor `config.local.php` je v `.gitignore` a nikdy se necommituje. Obsahuje tajné klíče pro přihlašování přes Microsoft.
+
+### Bezpečnostní nastavení (`config.local.php`)
+
+| Klíč | Výchozí | Význam |
+|---|---|---|
+| `allowed_teachers` | `[]` (nikdo) | **Povinné.** UPN učitelů s přístupem do administrace (bez ohledu na velikost písmen) |
+| `env` | `production` | `local` zapne výpis chyb a cookie cestu `/` (neodvozuje se z hlavičky `Host`) |
+| `app_origin` | `https://www.skolavdf.cz` | Origin aplikace: callback pro hub a kontrola `Origin` u zápisů |
+| `db_path` | `data/merits.db` | Databáze, nejlépe mimo DocumentRoot |
+| `anon_salt` | (původní sůl) | Sůl anonymních kódů. **Nastavení změní všechny kódy žáků.** |
+
+Konfiguraci lze umístit mimo DocumentRoot (proměnná prostředí `MERITS_CONFIG`). Přihlášení čte profil ze sdílené session hubu (cookie `skolavdf_hub_sso`, jen ke čtení); `?token=` z hubu se ignoruje a z URL odstraní. Odhlášení z administrace zničí tuto sdílenou session, tedy odhlásí i z ostatních aplikací hubu. Zápisové požadavky musí být `POST` s `Content-Type: application/json` a hlavičkou `Origin` shodnou s `app_origin`. Změny dat se zapisují do tabulky `audit_log` (kdo, co, ID — bez jmen žáků).
+

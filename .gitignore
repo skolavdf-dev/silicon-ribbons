@@ -3,6 +3,8 @@ config.local.php
 
 # SQLite databáze (obsahuje data studentů, generuje se automaticky)
 data/merits.db
+data/merits.db-wal
+data/merits.db-shm
 
 # Systémové soubory
 .DS_Store
