@@ -1,50 +1,48 @@
 <?php
 require_once __DIR__ . '/config.php';
-startAppSession();
+startAppSession(true);
 
 initDb();
 
 $loginError = '';
 
 // ─── Odhlášení ────────────────────────────────────────────────────────────────
-// Zničí sdílenou session hubu, tedy odhlásí uživatele ze všech aplikací hubu.
+// Zničí jen session této aplikace (ostatní aplikace hubu zůstanou přihlášené).
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['_action'] ?? '') === 'logout') {
-    destroySsoSession();
+    destroyAppSession();
     header('Location: admin.php?logged_out=1');
     exit;
 }
 
+// URL, na kterou hub vrací uživatele (bez query; stejná při zahájení i při výměně kódu).
+$callbackUrl = appOrigin() . ($_SERVER['SCRIPT_NAME'] ?? '/admin.php');
+
 // ─── Návrat z hubu ───────────────────────────────────────────────────────────
-// Hub k callbacku může připojit ?token=… — nepotřebujeme ho (identitu čteme ze
-// sdílené session), tak ho jednou přesměrováním odstraníme z URL.
-if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['token'])) {
-    header('Location: admin.php' . (isset($_GET['from_sso']) ? '?from_sso=1' : ''));
-    exit;
+// ?code= se vymění server-to-server za profil; vznikne nová session aplikace.
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['code'])) {
+    $profile = is_string($_GET['code']) ? hubCompleteLogin($_GET['code'], $callbackUrl) : null;
+    if ($profile !== null) {
+        session_regenerate_id(true);
+        $_SESSION[SSO_SESSION_KEY] = $profile;
+        header('Location: admin.php');
+        exit;
+    }
+    $loginError = 'Přihlášení se nepodařilo dokončit. Zkuste to prosím znovu.';
 }
 
 $ssoUser    = ssoSessionUser();
 $teacher    = currentTeacher();
 $isLoggedIn = $teacher !== null;
 
-if ($isLoggedIn && isset($_GET['from_sso'])) {
-    header('Location: admin.php');
-    exit;
-}
-
 if ($ssoUser !== null && !$isLoggedIn) {
     $loginError = 'Váš Microsoft účet (' . htmlspecialchars(trim((string) ($ssoUser['userPrincipalName'] ?? ''))) . ') nemá oprávnění pro přístup do administrace.';
-} elseif ($ssoUser === null && isset($_GET['from_sso'])) {
-    // Ochrana proti nekonečnému přesměrování hub ↔ aplikace
-    $loginError = 'Přihlášení se nepodařilo dokončit (sdílená relace nebyla nalezena). Zkuste to prosím znovu.';
 }
 
 // ─── URL pro přesměrování na SSO Hub ─────────────────────────────────────────
-// Origin je pevný (APP_ORIGIN), ne z hlavičky Host; lokálně se použije aktuální Host.
-$callbackUrl = appOrigin() . ($_SERVER['SCRIPT_NAME'] ?? '/admin.php') . '?from_sso=1';
-$ssoLoginUrl = SSO_HUB_URL . '?callback=' . urlencode($callbackUrl);
+$ssoLoginUrl = $isLoggedIn ? '' : hubLoginUrl($callbackUrl);
 
-// Auto-redirect k přihlášení — přeskočit mezistránku s tlačítkem
-// Potlačit auto-redirect po záměrném odhlášení, aby SSO nevlezlo hned zpět
+// Auto-redirect k přihlášení — přeskočit mezistránku s tlačítkem.
+// Potlačit po záměrném odhlášení a po chybě (ochrana proti smyčce hub ↔ aplikace).
 if (!$isLoggedIn && empty($loginError) && !isset($_GET['logged_out'])) {
     header('Location: ' . $ssoLoginUrl);
     exit;

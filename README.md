@@ -39,7 +39,7 @@ merits/
 
 1. Zkopírujte projektový adresář na webový server s PHP 8.x a povoleným SQLite rozšířením.
 2. Zkontrolujte oprávnění zápisu pro složku `data/` (PHP zde vytvoří a zapisuje do `merits.db`).
-3. Zkopírujte `config.local.example.php` jako `config.local.php` a doplňte `allowed_teachers` (UPN učitelů). Přihlášení běží přes sdílenou session hubu ([microsoft-sso-hub](https://github.com/skolavdf-dev/microsoft-sso-hub)), žádné tajemství se v aplikaci neukládá.
+3. Zkopírujte `config.local.example.php` jako `config.local.php` a doplňte `allowed_teachers` (UPN učitelů). Přihlášení běží přes jednorázový kód vyměněný na hubu ([microsoft-sso-hub](https://github.com/skolavdf-dev/microsoft-sso-hub), `verify.php`), žádné tajemství se v aplikaci neukládá.
 4. Otevřete `index.php` v prohlížeči — databáze se automaticky inicializuje se vzorovými daty.
 
 > **Poznámka:** Soubor `config.local.php` je v `.gitignore` a nikdy se necommituje. Obsahuje tajné klíče pro přihlašování přes Microsoft.
@@ -54,5 +54,5 @@ merits/
 | `db_path` | `data/merits.db` | Databáze, nejlépe mimo DocumentRoot |
 | `anon_salt` | (původní sůl) | Sůl anonymních kódů. **Nastavení změní všechny kódy žáků.** |
 
-Konfiguraci lze umístit mimo DocumentRoot (proměnná prostředí `MERITS_CONFIG`). Přihlášení čte profil ze sdílené session hubu (cookie `skolavdf_hub_sso`, jen ke čtení); `?token=` z hubu se ignoruje a z URL odstraní. Odhlášení z administrace zničí tuto sdílenou session, tedy odhlásí i z ostatních aplikací hubu. Zápisové požadavky musí být `POST` s `Content-Type: application/json` a hlavičkou `Origin` shodnou s `app_origin`. Změny dat se zapisují do tabulky `audit_log` (kdo, co, ID — bez jmen žáků).
+Konfiguraci lze umístit mimo DocumentRoot (proměnná prostředí `MERITS_CONFIG`). Přihlášení: admin zahájí PKCE tok (`challenge`), hub vrátí `?code=`, aplikace ho vymění server-to-server na `verify.php` a vytvoří vlastní session (cookie `skolavdf_merits`, jen pro složku aplikace). Odhlášení z administrace zničí jen tuto session. Zápisové požadavky musí být `POST` s `Content-Type: application/json` a hlavičkou `Origin` shodnou s `app_origin`. Změny dat se zapisují do tabulky `audit_log` (kdo, co, ID — bez jmen žáků).
 

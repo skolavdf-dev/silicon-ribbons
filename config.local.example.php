@@ -6,12 +6,10 @@
  * Soubor config.local.php je v .gitignore a NIKDY se necommituje.
  */
 return [
-    // Přihlášení běží přes sdílenou session hubu (jako mailer a portfolio):
-    // žádné tajemství se tu nekonfiguruje. Hodnoty session musí odpovídat hubu,
-    // výchozí hodnoty stačí (skolavdf_hub_sso, .skolavdf.cz, klíč 'user').
-    // 'sso_session_cookie_name'   => 'skolavdf_hub_sso',
-    // 'sso_session_cookie_domain' => '.skolavdf.cz',
-    // 'sso_session_key'           => 'user',
+    // Přihlášení běží přes jednorázový kód z hubu a vlastní session cookie aplikace.
+    // Žádné tajemství se tu nekonfiguruje.
+    // 'app_session_name' => 'skolavdf_merits',
+    // 'sso_session_key'  => 'user',
 
     // Povinné: UPN (přihlašovací jména v Entra ID) učitelů s přístupem do administrace.
     // Bez tohoto klíče nemá přístup nikdo.

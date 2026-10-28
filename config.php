@@ -53,12 +53,11 @@ define('DB_PATH', $_localCfg['db_path'] ?? (__DIR__ . '/data/merits.db'));
 // ─── Microsoft SSO Hub integrace ─────────────────────────────────────────────
 define('SSO_HUB_URL',    $_localCfg['sso_hub_url']    ?? 'https://www.skolavdf.cz/hub/auth/');
 
-// Přihlášení běží přes sdílenou session hubu (stejně jako mailer a portfolio):
-// hub zapíše profil do $_SESSION[SSO_SESSION_KEY], aplikace ho jen čte.
-// Žádné tajemství se v aplikaci neukládá. Hodnoty MUSÍ odpovídat hubu.
-define('SSO_SESSION_KEY',           $_localCfg['sso_session_key']           ?? 'user');
-define('SSO_SESSION_COOKIE_NAME',   $_localCfg['sso_session_cookie_name']   ?? 'skolavdf_hub_sso');
-define('SSO_SESSION_COOKIE_DOMAIN', $_localCfg['sso_session_cookie_domain'] ?? '.skolavdf.cz');
+// Přihlášení běží přes jednorázový kód vyměněný server-to-server na hubu (verify.php)
+// a aplikace má VLASTNÍ session cookie (jen pro svou složku). Žádné tajemství se
+// neukládá a session hubu se nečte ani nezapisuje.
+define('SSO_SESSION_KEY',  $_localCfg['sso_session_key']  ?? 'user');
+define('APP_SESSION_NAME', $_localCfg['app_session_name'] ?? 'skolavdf_merits');
 
 // Sůl pro anonymní kódy žáků. Prázdná = původní (zveřejněná) sůl kvůli zpětné
 // kompatibilitě kódů. Nastavením vlastní soli se VŠECHNY kódy změní.
@@ -74,28 +73,32 @@ $ALLOWED_TEACHERS = array_values(array_unique(array_filter(array_map(
 
 unset($_localCfg);
 
-// ─── Přihlášení: sdílená session hubu (jen ke čtení) ─────────────────────────
-// Aplikace session hubu nikdy nezapisuje (read_and_close) a nemá vlastní.
-// Výjimkou je odhlášení (destroySsoSession), které session hubu zničí.
-function sharedSessionParams(): void {
-    session_name(SSO_SESSION_COOKIE_NAME);
+// ─── Přihlášení: vlastní session + jednorázový kód z hubu ────────────────────
+function appSessionParams(): void {
+    $path = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/')), '/') . '/';
+    session_name(APP_SESSION_NAME);
     session_set_cookie_params([
         'lifetime' => 0,
-        'path'     => '/',
-        'domain'   => IS_LOCAL_ENV ? '' : SSO_SESSION_COOKIE_DOMAIN,
+        'path'     => $path,
         'secure'   => !IS_LOCAL_ENV || (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on'),
         'httponly' => true,
-        'samesite' => 'Lax',
+        'samesite' => 'Lax', // Lax: cookie se pošle i při návratu z hubu (top-level GET)
     ]);
 }
 
-/** Otevře sdílenou session jen pro čtení (zamknutí se hned uvolní). */
-function startAppSession(): void {
-    if (session_status() === PHP_SESSION_ACTIVE || !isset($_COOKIE[SSO_SESSION_COOKIE_NAME])) {
+/**
+ * Otevře session aplikace. $write = true (jen admin.php) ji otevře pro zápis;
+ * jinak se otevře jen pro čtení (zamknutí se hned uvolní) a jen pokud cookie existuje.
+ */
+function startAppSession(bool $write = false): void {
+    if (session_status() === PHP_SESSION_ACTIVE) {
         return;
     }
-    sharedSessionParams();
-    session_start(['read_and_close' => true]);
+    if (!$write && !isset($_COOKIE[APP_SESSION_NAME])) {
+        return;
+    }
+    appSessionParams();
+    session_start($write ? [] : ['read_and_close' => true]);
 }
 
 /** Profil přihlášeného uživatele z hubu (bez ohledu na oprávnění), nebo null. */
@@ -130,24 +133,77 @@ function isAdminSession(): bool {
     return currentTeacher() !== null;
 }
 
-/** Odhlášení: zničí sdílenou session hubu (platí pro všechny aplikace hubu na doméně). */
-function destroySsoSession(): void {
-    if (!isset($_COOKIE[SSO_SESSION_COOKIE_NAME])) {
+/** Odhlášení: zničí session TÉTO aplikace (musí být otevřená pro zápis, viz startAppSession(true)). */
+function destroyAppSession(): void {
+    if (session_status() !== PHP_SESSION_ACTIVE) {
         return;
     }
-    sharedSessionParams();
-    session_start();
     $_SESSION = [];
     $p = session_get_cookie_params();
     setcookie(session_name(), '', [
         'expires'  => time() - 42000,
         'path'     => $p['path'],
-        'domain'   => $p['domain'],
         'secure'   => $p['secure'],
         'httponly' => $p['httponly'],
         'samesite' => 'Lax',
     ]);
     session_destroy();
+}
+
+/**
+ * URL přihlášení na hubu s PKCE výzvou (verifier zůstává jen v session aplikace).
+ * Vyžaduje session otevřenou pro zápis.
+ */
+function hubLoginUrl(string $callbackUrl): string {
+    $v = $_SESSION['_hub_login']['verifier'] ?? null;
+    if (!is_string($v) || !preg_match('/^[A-Za-z0-9_-]{43}$/', $v)) {
+        $v = rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
+        $_SESSION['_hub_login'] = ['verifier' => $v];
+    }
+    $challenge = rtrim(strtr(base64_encode(hash('sha256', $v, true)), '+/', '-_'), '=');
+    return rtrim(SSO_HUB_URL, '/') . '/?callback=' . urlencode($callbackUrl) . '&challenge=' . $challenge;
+}
+
+/**
+ * Vymění jednorázový kód z hubu (POST verify.php, server-to-server) za profil.
+ * Verifier se spotřebuje vždy. Vrací profil, nebo null.
+ */
+function hubCompleteLogin(string $code, string $callbackUrl): ?array {
+    $verifier = $_SESSION['_hub_login']['verifier'] ?? null;
+    unset($_SESSION['_hub_login']);
+    if (!is_string($verifier) || !preg_match('/^[A-Za-z0-9_-]{43}$/', $code) || !function_exists('curl_init')) {
+        return null;
+    }
+    $ch = curl_init(rtrim(SSO_HUB_URL, '/') . '/verify.php');
+    curl_setopt_array($ch, [
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => http_build_query(['code' => $code, 'verifier' => $verifier, 'callback' => $callbackUrl]),
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CONNECTTIMEOUT => 5,
+        CURLOPT_TIMEOUT        => 10,
+        CURLOPT_SSL_VERIFYPEER => true,
+        CURLOPT_SSL_VERIFYHOST => 2,
+        CURLOPT_FOLLOWLOCATION => false,
+    ]);
+    $raw    = curl_exec($ch);
+    $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    if ($raw === false) {
+        error_log('merits: verify.php nedostupné: ' . curl_error($ch));
+    }
+    $data = is_string($raw) ? json_decode($raw, true) : null;
+    if ($status !== 200 || !is_array($data) || ($data['ok'] ?? false) !== true || !is_array($data['user'] ?? null)) {
+        return null;
+    }
+    $u = $data['user'];
+    if (!is_string($u['userPrincipalName'] ?? null) || $u['userPrincipalName'] === '') {
+        return null;
+    }
+    return [
+        'id'                => (string) ($u['id'] ?? ''),
+        'displayName'       => (string) ($u['displayName'] ?? ''),
+        'mail'              => (string) ($u['mail'] ?? ''),
+        'userPrincipalName' => (string) $u['userPrincipalName'],
+    ];
 }
 
 /** Origin aplikace pro callback na hub: pevný (APP_ORIGIN); lokálně aktuální Host. */
